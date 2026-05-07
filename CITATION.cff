@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use CheckCardioNet in your research, please cite it as below."
+title: "CheckCardioNet: Predicting ICI-driven cardiovascular acceleration risk and individualizing ICI recommendations from a tumor checkpoint expression profile"
+abstract: >-
+  CheckCardioNet is an open-source command-line prediction tool for cardio-
+  oncology. Given a patient's tumor checkpoint expression profile (z-score),
+  cancer type, and baseline cardiovascular susceptibility, it computes a
+  per-drug CVD-acceleration score and produces an individualized ICI
+  recommendation, ranking candidate drugs by net benefit and surfacing
+  dual-benefit alternatives where appropriate. Pre-trained Mendelian-
+  randomization causal effects, bidirectionality scores, and a dual-benefit
+  drug atlas are bundled inside the package — no external data download is
+  required.
+authors:
+  - name: "CheckCardioNet Authors"
+keywords:
+  - immune-checkpoint
+  - cardio-oncology
+  - cardiotoxicity
+  - drug-recommendation
+  - precision-oncology
+  - bioinformatics
+version: "0.1.0"
+date-released: "2026-05-06"
+license: MIT
+repository-code: "https://github.com/liuxudr/CheckCardioNet"
+type: software

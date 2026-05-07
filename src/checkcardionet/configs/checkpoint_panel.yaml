@@ -1,0 +1,148 @@
+# CheckCardioNet 扩展检查点基因面板
+# 基于 ideaA checkpoint_panel.yaml 扩展，新增 efferocytosis 轴和抑制性配体
+# 总计 ~52 个基因，覆盖肿瘤和 CVD 相关分子
+
+adaptive_inhibitory:
+  - PDCD1      # PD-1
+  - CTLA4      # CTLA-4
+  - LAG3       # LAG-3
+  - HAVCR2     # TIM-3
+  - TIGIT
+  - BTLA
+  - VSIR       # VISTA
+  - CD160
+  - LAIR1
+  - KLRG1
+  - CD244      # 2B4
+
+inhibitory_ligands:
+  - CD274      # PD-L1
+  - PDCD1LG2   # PD-L2
+  - LGALS9     # Galectin-9 (TIM-3 配体)
+  - PVR        # CD155 (TIGIT 配体)
+  - NECTIN2    # CD112 (TIGIT 配体)
+  - CD276      # B7-H3
+  - VTCN1      # B7-H4
+  - HHLA2      # B7-H7
+  - FGL1       # LAG-3 配体
+  - SIGLEC15
+
+innate_checkpoints:
+  - CD47       # "don't eat me" 信号
+  - SIRPA      # SIRPalpha (CD47 受体)
+  - SIRPB1
+  - LILRB1     # CD85j
+  - LILRB2     # CD85d
+  - LILRB4
+  - SIGLEC9
+  - SIGLEC10
+  - KLRC1      # NKG2A
+  - KLRD1      # CD94
+  - CD96
+
+efferocytosis_regulators:
+  # CVD 特别重要，与肿瘤形成"双向"关联
+  - MERTK      # TAM 受体，efferocytosis 关键
+  - AXL        # TAM 受体，也与 ICI 耐药相关
+  - TYRO3      # TAM 受体
+  - GAS6       # TAM 配体（凋亡细胞 PS 桥接）
+  - PROS1      # TAM 配体
+  - STAB2      # 磷脂酰丝氨酸受体
+  - TIMD4      # TIM-4，凋亡细胞识别
+  - LRP1       # 多功能受体，参与斑块清除
+
+costimulatory:
+  - CD28
+  - ICOS
+  - ICOSLG
+  - TNFRSF4    # OX40
+  - TNFRSF9    # 4-1BB
+  - CD40LG     # CD154
+  - CD40
+  - TNFRSF18   # GITR
+  - CD226      # DNAM-1
+
+inflammation_cardiovascular:
+  # 心血管重要炎症分子，与检查点功能交织
+  - IL6
+  - TNF
+  - IFNG
+  - IL1B
+  - NLRP3
+  - CASP1
+  - VCAM1      # 血管细胞粘附分子，AS 关键
+  - ICAM1
+  - SELE       # E-selectin
+
+# 汇总：全部检查点（供循环使用）
+all_checkpoints:
+  - PDCD1
+  - CTLA4
+  - LAG3
+  - HAVCR2
+  - TIGIT
+  - BTLA
+  - VSIR
+  - CD160
+  - LAIR1
+  - KLRG1
+  - CD244
+  - CD274
+  - PDCD1LG2
+  - LGALS9
+  - PVR
+  - NECTIN2
+  - CD276
+  - VTCN1
+  - HHLA2
+  - FGL1
+  - SIGLEC15
+  - CD47
+  - SIRPA
+  - SIRPB1
+  - LILRB1
+  - LILRB2
+  - LILRB4
+  - SIGLEC9
+  - SIGLEC10
+  - KLRC1
+  - KLRD1
+  - CD96
+  - MERTK
+  - AXL
+  - TYRO3
+  - GAS6
+  - PROS1
+  - STAB2
+  - TIMD4
+  - LRP1
+  - CD28
+  - ICOS
+  - ICOSLG
+  - TNFRSF4
+  - TNFRSF9
+  - CD40LG
+  - CD40
+  - TNFRSF18
+  - CD226
+  - IL6
+  - TNF
+  - IFNG
+
+# MR 分析核心检查点（用于 GTEx eQTL + GWAS 分析）
+mr_priority_checkpoints:
+  - PDCD1
+  - CD274
+  - CTLA4
+  - LAG3
+  - HAVCR2
+  - TIGIT
+  - CD47
+  - SIRPA
+  - MERTK
+  - AXL
+  - LILRB1
+  - LILRB2
+  - KLRC1
+  - CD276
+  - VSIR

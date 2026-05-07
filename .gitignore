@@ -1,0 +1,74 @@
+# ─── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+sdist/
+wheels/
+share/python-wheels/
+MANIFEST
+UNKNOWN.egg-info/
+pip-wheel-metadata/
+
+# ─── Virtual environments ─────────────────────────────────────────────────
+.env
+.venv
+env/
+venv/
+ENV/
+
+# ─── Testing / coverage / type-check ──────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ─── Jupyter / IPython ────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ─── IDE / editor ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── OS ───────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# ─── User-side outputs (do not commit user data or generated reports) ────
+results/
+demo_results/
+predictions.csv
+*.json.bak
+
+# ─── Editor / model artifacts that should never be committed ─────────────
+*.pkl
+*.joblib
+*.model
+*.ckpt
+
+# ─── Logs ─────────────────────────────────────────────────────────────────
+*.log
+logs/
