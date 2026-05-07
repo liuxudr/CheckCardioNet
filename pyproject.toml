@@ -64,7 +64,8 @@ Changelog     = "https://github.com/liuxudr/CheckCardioNet/blob/main/CHANGELOG.m
 checkcardionet = "checkcardionet.cli:app"
 
 # ── Hatch packaging ────────────────────────────────────────────────────────
-# 把 configs/ + 预训练 parquet 一并打入 wheel，让用户从 GitHub 安装即开箱可用。
+# Bundle configs/ + pretrained parquet files into the wheel so the tool
+# works out of the box right after `pip install` from GitHub.
 [tool.hatch.build.targets.wheel]
 packages = ["src/checkcardionet"]
 

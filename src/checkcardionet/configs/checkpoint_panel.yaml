@@ -1,6 +1,7 @@
-# CheckCardioNet 扩展检查点基因面板
-# 基于 ideaA checkpoint_panel.yaml 扩展，新增 efferocytosis 轴和抑制性配体
-# 总计 ~52 个基因，覆盖肿瘤和 CVD 相关分子
+# CheckCardioNet immune-checkpoint gene panel.
+# ~52 genes covering both tumor and cardiovascular biology, organized into:
+#   adaptive_inhibitory, inhibitory_ligands, innate_checkpoints,
+#   efferocytosis_regulators, costimulatory, inflammation_cardiovascular.
 
 adaptive_inhibitory:
   - PDCD1      # PD-1
@@ -18,18 +19,18 @@ adaptive_inhibitory:
 inhibitory_ligands:
   - CD274      # PD-L1
   - PDCD1LG2   # PD-L2
-  - LGALS9     # Galectin-9 (TIM-3 配体)
-  - PVR        # CD155 (TIGIT 配体)
-  - NECTIN2    # CD112 (TIGIT 配体)
+  - LGALS9     # Galectin-9 (TIM-3 ligand)
+  - PVR        # CD155 (TIGIT ligand)
+  - NECTIN2    # CD112 (TIGIT ligand)
   - CD276      # B7-H3
   - VTCN1      # B7-H4
   - HHLA2      # B7-H7
-  - FGL1       # LAG-3 配体
+  - FGL1       # LAG-3 ligand
   - SIGLEC15
 
 innate_checkpoints:
-  - CD47       # "don't eat me" 信号
-  - SIRPA      # SIRPalpha (CD47 受体)
+  - CD47       # "don't eat me" signal
+  - SIRPA      # SIRPalpha (CD47 receptor)
   - SIRPB1
   - LILRB1     # CD85j
   - LILRB2     # CD85d
@@ -41,15 +42,15 @@ innate_checkpoints:
   - CD96
 
 efferocytosis_regulators:
-  # CVD 特别重要，与肿瘤形成"双向"关联
-  - MERTK      # TAM 受体，efferocytosis 关键
-  - AXL        # TAM 受体，也与 ICI 耐药相关
-  - TYRO3      # TAM 受体
-  - GAS6       # TAM 配体（凋亡细胞 PS 桥接）
-  - PROS1      # TAM 配体
-  - STAB2      # 磷脂酰丝氨酸受体
-  - TIMD4      # TIM-4，凋亡细胞识别
-  - LRP1       # 多功能受体，参与斑块清除
+  # CVD-relevant; bidirectionally linked with tumor biology
+  - MERTK      # TAM receptor, key efferocytosis driver
+  - AXL        # TAM receptor; also implicated in ICI resistance
+  - TYRO3      # TAM receptor
+  - GAS6       # TAM ligand (bridges apoptotic cell PS)
+  - PROS1      # TAM ligand
+  - STAB2      # Phosphatidylserine receptor
+  - TIMD4      # TIM-4; recognizes apoptotic cells
+  - LRP1       # Scavenger receptor; plaque clearance
 
 costimulatory:
   - CD28
@@ -63,18 +64,18 @@ costimulatory:
   - CD226      # DNAM-1
 
 inflammation_cardiovascular:
-  # 心血管重要炎症分子，与检查点功能交织
+  # Cardiovascular inflammatory mediators that intersect with checkpoint biology
   - IL6
   - TNF
   - IFNG
   - IL1B
   - NLRP3
   - CASP1
-  - VCAM1      # 血管细胞粘附分子，AS 关键
+  - VCAM1      # Vascular adhesion molecule; key in atherosclerosis
   - ICAM1
   - SELE       # E-selectin
 
-# 汇总：全部检查点（供循环使用）
+# Aggregated list (used for iteration in code).
 all_checkpoints:
   - PDCD1
   - CTLA4
@@ -129,7 +130,7 @@ all_checkpoints:
   - TNF
   - IFNG
 
-# MR 分析核心检查点（用于 GTEx eQTL + GWAS 分析）
+# Priority subset for MR analysis (GTEx eQTL + CVD GWAS).
 mr_priority_checkpoints:
   - PDCD1
   - CD274

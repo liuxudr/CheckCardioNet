@@ -203,21 +203,21 @@ The MR effect sizes, BDS scores, and dual-benefit atlas were derived from a publ
 ### Text recommendation
 
 ```
-== 个体化 ICI 方案推荐 ==
-癌种: SKCM | 基线 CVD 风险: 高（0.75）
+== Individualized ICI Recommendation ==
+Cancer type: SKCM | Baseline CVD risk: high (0.75)
 
-首选方案: nivolumab
-  肿瘤获益估计: 40%
-  CVD 加速评分: 0.218
-  综合净获益:   0.236
-  分类:         Standard ICI (low CVD concern)
+Primary recommendation: nivolumab
+  Tumor benefit (est.):   40%
+  CVD acceleration score: +0.218
+  Net benefit:            +0.236
+  Category:               Standard ICI (low CVD concern)
 
-⚠ 心脏保护建议：
-  • 联合他汀 ± 阿司匹林（斑块稳定）
-  • 基线及每3个月超声心动图
-  • 如 CVD 事件高风险，考虑换用 magrolimab（dual-benefit）
+[!] Cardiac-protection suggestions:
+  - Co-administer statin +/- aspirin (plaque stabilization)
+  - Baseline echocardiogram, repeat every 3 months
+  - If CVD event risk is very high, consider switching to magrolimab (dual-benefit)
 
-双效替代方案: magrolimab
+Dual-benefit alternatives: magrolimab
 ```
 
 ### JSON output (single patient)

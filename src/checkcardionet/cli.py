@@ -1,11 +1,12 @@
-"""CheckCardioNet — ICI 心血管加速风险预测 CLI.
+"""CheckCardioNet — ICI cardiovascular acceleration risk prediction CLI.
 
-子命令：
-    list-drugs         列出支持的 ICI 药物
-    score-patient      单患者预测：CVD 加速评分 + ICI 推荐
-    score-cohort       从 CSV 批量预测
+Subcommands:
+    list-drugs        List supported ICI drugs and targets
+    score-patient     Single-patient CVD-acceleration score + ICI recommendation
+    score-cohort      Batch prediction from a cohort CSV
 
-工具开箱即用，预训练数据(MR / BDS / dual-benefit atlas)随包分发。
+Pre-trained artifacts (MR / BDS / dual-benefit atlas) ship inside the package,
+so the tool works out of the box with no external data download.
 """
 from __future__ import annotations
 
@@ -21,8 +22,8 @@ from rich.table import Table
 app = typer.Typer(
     name="checkcardionet",
     help=(
-        "ICI 心血管加速风险预测 (Predict ICI-driven cardiovascular acceleration "
-        "risk and generate individualized ICI recommendations)."
+        "Predict ICI-driven cardiovascular acceleration risk and generate "
+        "individualized ICI recommendations."
     ),
     add_completion=False,
 )
@@ -36,17 +37,17 @@ logging.basicConfig(
 )
 
 
-# ─── 内部工具：解析表达谱 ─────────────────────────────────────────────────────
+# ─── Helpers: parse expression profile ───────────────────────────────────────
 
 def _parse_inline_expr(s: str) -> dict[str, float]:
-    """解析 'GENE1=val1,GENE2=val2' 格式的表达谱。"""
+    """Parse a 'GENE1=val1,GENE2=val2' string."""
     out: dict[str, float] = {}
     if not s:
         return out
     for tok in s.split(","):
         if "=" not in tok:
             raise typer.BadParameter(
-                f"--expr 项必须为 'GENE=VALUE' 格式，得到: {tok!r}"
+                f"--expr token must be 'GENE=VALUE', got: {tok!r}"
             )
         gene, val = tok.split("=", 1)
         out[gene.strip()] = float(val.strip())
@@ -54,7 +55,7 @@ def _parse_inline_expr(s: str) -> dict[str, float]:
 
 
 def _parse_expr_file(path: Path) -> dict[str, float]:
-    """从 CSV/TSV 读取两列(gene,value)表达谱。"""
+    """Read a two-column (gene, value) expression CSV/TSV."""
     import pandas as pd
 
     sep = "\t" if path.suffix.lower() in (".tsv", ".txt") else ","
@@ -69,7 +70,8 @@ def _parse_expr_file(path: Path) -> dict[str, float]:
     if df.shape[1] >= 2:
         return dict(zip(df.iloc[:, 0].astype(str), df.iloc[:, 1].astype(float)))
     raise typer.BadParameter(
-        f"无法解析 {path}：需要两列(gene, value) CSV 或 'gene' + 'value/expr' 表头。"
+        f"Cannot parse {path}: need a two-column (gene, value) CSV or "
+        f"a header row with 'gene' + 'value/expr/expression'."
     )
 
 
@@ -77,11 +79,11 @@ def _resolve_expr(
     expr_inline: str | None,
     expr_file: Path | None,
 ) -> dict[str, float]:
-    """合并 --expr 与 --expr-file，文件优先；缺一也允许（仅基于先验）。"""
+    """Merge --expr and --expr-file inputs (file first, inline overrides per gene)."""
     expr: dict[str, float] = {}
     if expr_file:
         if not expr_file.exists():
-            raise typer.BadParameter(f"--expr-file {expr_file} 不存在")
+            raise typer.BadParameter(f"--expr-file {expr_file} does not exist")
         expr.update(_parse_expr_file(expr_file))
     if expr_inline:
         expr.update(_parse_inline_expr(expr_inline))
@@ -92,7 +94,7 @@ def _resolve_expr(
 
 @app.command(name="list-drugs")
 def list_drugs():
-    """列出支持的 ICI 药物及靶点。"""
+    """List supported ICI drugs and their molecular targets."""
     from checkcardionet.scoring.cvd_acceleration_score import ICI_CVD_PRIOR
 
     table = Table(title="Supported ICI drugs", show_lines=False)
@@ -118,44 +120,45 @@ def list_drugs():
 def score_patient(
     cancer_type: str = typer.Option(
         ..., "--cancer-type", "-c",
-        help="癌种代码（如 NSCLC, SKCM, BLCA, KIRC, HCC, AML, MDS）",
+        help="TCGA / cancer code (e.g. NSCLC, SKCM, BLCA, KIRC, HCC, AML, MDS)",
     ),
     cvd_susceptibility: float = typer.Option(
         0.5, "--cvd-susceptibility", "--cvd",
         min=0.0, max=1.0,
-        help="基线 CVD 易感性 ∈ [0,1]（low<0.3, moderate 0.3-0.6, high>0.6）",
+        help="Baseline CVD susceptibility in [0,1] (low<0.3, moderate 0.3-0.6, high>0.6)",
     ),
     expr: str = typer.Option(
         "", "--expr", "-e",
-        help="检查点表达谱（z-score）：'PDCD1=2.5,CD274=1.8,CD47=3.0'",
+        help="Inline checkpoint expression profile (z-score), e.g. 'PDCD1=2.5,CD274=1.8,CD47=3.0'",
     ),
     expr_file: Path = typer.Option(
         None, "--expr-file", "-f",
-        help="CSV/TSV：两列(gene, value) 或 'gene'+'value/expr' 表头",
+        help="CSV/TSV with two columns (gene, value) or header 'gene' + 'value/expr/expression'",
     ),
     drug: str = typer.Option(
         "", "--drug", "-d",
-        help="（可选）只评估单个 ICI 药物；省略则比较所有支持的 ICI",
+        help="(Optional) score a single ICI drug; omit to compare all supported drugs",
     ),
     candidates: str = typer.Option(
         "", "--candidates",
-        help="候选 ICI 列表(逗号分隔)，如 'pembrolizumab,nivolumab,magrolimab'；"
-             "省略则使用全部",
+        help="Comma-separated candidate ICI list, e.g. 'pembrolizumab,nivolumab,magrolimab'; "
+             "omit to use all supported drugs",
     ),
     output_json: Path = typer.Option(
         None, "--output-json", "-o",
-        help="（可选）将结果写入 JSON",
+        help="(Optional) write the result to a JSON file",
     ),
 ):
-    """单患者预测：计算 CVD 加速评分并给出 ICI 个体化推荐。"""
+    """Single-patient prediction: CVD-acceleration score + individualized ICI recommendation."""
     patient_expr = _resolve_expr(expr, expr_file)
     if not patient_expr:
         console.print(
-            "[yellow]⚠ 未提供表达谱(--expr / --expr-file)；将仅基于药物先验给出粗略评分。[/yellow]"
+            "[yellow]! No expression profile provided (--expr / --expr-file); "
+            "scoring will fall back to drug-level priors only.[/yellow]"
         )
 
     if drug:
-        # 单药模式
+        # Single-drug mode
         from checkcardionet.scoring import ICIDrivenCVDAccelerationScore
 
         scorer = ICIDrivenCVDAccelerationScore()
@@ -163,11 +166,13 @@ def score_patient(
         _print_single_drug(result, cancer_type, cvd_susceptibility)
         if output_json:
             output_json.parent.mkdir(parents=True, exist_ok=True)
-            output_json.write_text(json.dumps(_jsonable(result), indent=2, ensure_ascii=False))
-            console.print(f"[dim]→ 已保存 {output_json}[/dim]")
+            output_json.write_text(
+                json.dumps(_jsonable(result), indent=2, ensure_ascii=False)
+            )
+            console.print(f"[dim]-> saved {output_json}[/dim]")
         return
 
-    # 多药对比模式
+    # Multi-drug comparison mode
     from checkcardionet.scoring import IntegratedRecommendationSystem
 
     rec_system = IntegratedRecommendationSystem()
@@ -188,41 +193,42 @@ def score_patient(
         rec_serial = {k: v for k, v in rec.items() if k != "ranked_drugs"}
         rec_serial["ranked_drugs"] = rec["ranked_drugs"].to_dict("records")
         output_json.write_text(json.dumps(rec_serial, indent=2, ensure_ascii=False))
-        console.print(f"[dim]→ 已保存 {output_json}[/dim]")
+        console.print(f"[dim]-> saved {output_json}[/dim]")
 
 
 # ─── score-cohort ────────────────────────────────────────────────────────────
 
 @app.command(name="score-cohort")
 def score_cohort(
-    input_csv: Path = typer.Argument(..., help="队列 CSV（每行一个患者）"),
+    input_csv: Path = typer.Argument(..., help="Cohort CSV (one patient per row)"),
     output_csv: Path = typer.Option(
         Path("predictions.csv"), "--output", "-o",
-        help="输出 CSV：每行 = patient × drug 的评分",
+        help="Output CSV (one row per patient x drug)",
     ),
     candidates: str = typer.Option(
         "", "--candidates",
-        help="候选 ICI 列表(逗号分隔)；省略则全部",
+        help="Comma-separated candidate ICI list; omit to use all supported drugs",
     ),
 ):
-    """批量队列预测。
+    """Batch cohort prediction.
 
-    输入 CSV 必备列：
+    Required input CSV columns:
       patient_id, cancer_type, cvd_susceptibility
-    + 任意基因表达列（如 PDCD1, CD274, CD47, …），列名必须是基因 symbol。
+    Plus any number of gene-expression columns (e.g. PDCD1, CD274, CD47, ...).
+    Column names must match HGNC checkpoint gene symbols.
     """
     import pandas as pd
     from checkcardionet.scoring import IntegratedRecommendationSystem
     from checkcardionet.data.preprocess import load_checkpoint_panel
 
     if not input_csv.exists():
-        raise typer.BadParameter(f"{input_csv} 不存在")
+        raise typer.BadParameter(f"{input_csv} does not exist")
     df = pd.read_csv(input_csv)
 
     required = {"patient_id", "cancer_type", "cvd_susceptibility"}
     missing = required - set(df.columns)
     if missing:
-        raise typer.BadParameter(f"输入 CSV 缺少列: {missing}")
+        raise typer.BadParameter(f"Input CSV is missing required column(s): {missing}")
 
     panel = set(load_checkpoint_panel("all_checkpoints"))
     expr_cols = [c for c in df.columns if c in panel]
@@ -254,7 +260,7 @@ def score_cohort(
                 "category": r["category"],
                 "recommendation_priority": r["recommendation_priority"],
                 "primary_recommendation": (
-                    "✓" if r["drug"] == rec["primary_recommendation"] else ""
+                    "*" if r["drug"] == rec["primary_recommendation"] else ""
                 ),
             })
 
@@ -262,13 +268,13 @@ def score_cohort(
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     out_df.to_csv(output_csv, index=False)
 
-    primary = out_df[out_df["primary_recommendation"] == "✓"]
+    primary = out_df[out_df["primary_recommendation"] == "*"]
     console.print(
-        f"[green]✓ 队列预测完成[/green]：{df.shape[0]} 患者 × "
-        f"{out_df['drug'].nunique()} 药物 = {len(out_df)} 条评分 → {output_csv}"
+        f"[green]Cohort prediction complete[/green]: {df.shape[0]} patient(s) x "
+        f"{out_df['drug'].nunique()} drug(s) = {len(out_df)} score row(s) -> {output_csv}"
     )
     if not primary.empty:
-        console.print("\n[bold]每患者首选 ICI：[/bold]")
+        console.print("\n[bold]Primary recommendation per patient:[/bold]")
         console.print(
             primary[["patient_id", "cancer_type", "drug",
                      "onco_benefit", "cvd_accel_score", "net_benefit", "category"]]
@@ -276,7 +282,7 @@ def score_cohort(
         )
 
 
-# ─── 输出辅助 ─────────────────────────────────────────────────────────────────
+# ─── Output helpers ──────────────────────────────────────────────────────────
 
 def _print_single_drug(result: dict, cancer_type: str, cvd: float) -> None:
     drug = result["drug"]
@@ -294,7 +300,7 @@ def _print_single_drug(result: dict, cancer_type: str, cvd: float) -> None:
         comp = Table(title="Per-target decomposition")
         comp.add_column("Target", style="cyan")
         comp.add_column("Expr weight", justify="right")
-        comp.add_column("MR β",        justify="right")
+        comp.add_column("MR beta",     justify="right")
         comp.add_column("BDS",         justify="right")
         comp.add_column("Component",   justify="right", style="yellow")
         for tgt, c in result["components"].items():
@@ -329,7 +335,7 @@ def _print_recommendation(rec: dict) -> None:
 
 
 def _jsonable(obj):
-    """将 numpy / pandas 标量转为内置类型供 json.dumps。"""
+    """Convert numpy / pandas scalars into builtin types for json.dumps."""
     import numpy as np
 
     if isinstance(obj, dict):

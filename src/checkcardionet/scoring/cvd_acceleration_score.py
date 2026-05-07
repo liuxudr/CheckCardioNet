@@ -1,15 +1,18 @@
-"""ICI 治疗加速 CVD 的风险评分（核心创新）。
+"""ICI-driven CVD acceleration risk score.
 
-公式：
-  CVD_accel_score = Σ_{c ∈ targets(ICI)}
-      weight_c × MR_cvd_effect_c × patient_susceptibility_c
+Formula:
+  CVD_accel_score = sum over c in targets(ICI) of
+      weight_c x MR_cvd_effect_c x patient_susceptibility_c
 
-各分量：
-  weight_c           — 该检查点在患者肿瘤中的表达（eQTL/RNA-seq 数据）
-  MR_cvd_effect_c    — 该检查点对 CVD 的 MR 因果效应（beta，来自 Phase 4）
-  patient_susceptibility_c — 患者基线 CVD 易感性 × 检查点双向性
+Components:
+  weight_c                 - checkpoint expression in the patient's tumor
+                              (z-score / log-TPM, from eQTL or RNA-seq).
+  MR_cvd_effect_c          - Mendelian-randomization causal effect of the
+                              checkpoint on CVD (IVW beta).
+  patient_susceptibility_c - baseline CVD susceptibility x checkpoint
+                              bidirectionality (BDS).
 
-高分 → ICI 方案对该患者显著加速 CVD 进展的概率高
+High score => ICI regimen is likely to significantly accelerate CVD in this patient.
 """
 from __future__ import annotations
 
@@ -23,7 +26,8 @@ from ..data.preprocess import PRETRAINED_DIR, load_checkpoint_panel
 
 logger = logging.getLogger(__name__)
 
-# 每种 ICI 药物对应的靶点及已知 CVD 风险权重（文献先验）
+# Per-drug targets and literature-derived CVD-risk priors.
+# A negative prior (e.g. magrolimab) indicates a putative CVD-protective drug.
 ICI_CVD_PRIOR: dict[str, dict] = {
     "pembrolizumab": {"targets": ["PDCD1"], "cvd_risk_prior": 0.7},
     "nivolumab":     {"targets": ["PDCD1"], "cvd_risk_prior": 0.7},
@@ -33,21 +37,22 @@ ICI_CVD_PRIOR: dict[str, dict] = {
     "relatlimab":    {"targets": ["LAG3"],  "cvd_risk_prior": 0.3},
     "tiragolumab":   {"targets": ["TIGIT"], "cvd_risk_prior": 0.3},
     "cobolimab":     {"targets": ["HAVCR2"],"cvd_risk_prior": 0.5},
-    "magrolimab":    {"targets": ["CD47"],  "cvd_risk_prior": -0.3},  # 负值 = CVD 保护
+    "magrolimab":    {"targets": ["CD47"],  "cvd_risk_prior": -0.3},  # CVD-protective
     "monalizumab":   {"targets": ["KLRC1"], "cvd_risk_prior": 0.2},
     "MK-4830":       {"targets": ["LILRB2"],"cvd_risk_prior": 0.2},
 }
 
 
 class ICIDrivenCVDAccelerationScore:
-    """评估 ICI 方案对特定患者加速 CVD 进展的风险。
+    """Estimate the per-patient risk that an ICI regimen accelerates CVD progression.
 
-    用法::
+    Example::
 
         scorer = ICIDrivenCVDAccelerationScore()
-        # 患者表达谱（基因表达水平，可来自 RNA-seq）
+        # Patient checkpoint expression profile (z-score / log-TPM)
         patient_expr = {"PDCD1": 2.5, "CD274": 1.8, "CD47": 3.1}
-        result = scorer.compute(patient_expr, proposed_ici="pembrolizumab",
+        result = scorer.compute(patient_expr,
+                                proposed_ici="pembrolizumab",
                                 cvd_susceptibility=0.6)
     """
 
@@ -59,7 +64,7 @@ class ICIDrivenCVDAccelerationScore:
         self._bds = self._load_bds()
 
     def _load_mr_effects(self) -> dict[str, float]:
-        """加载 MR 分析中各检查点对 CVD 的平均效应（beta）。"""
+        """Load median per-gene MR causal effects on CVD (IVW beta)."""
         path = PRETRAINED_DIR / "mr_results.parquet"
         if not path.exists():
             return {}
@@ -67,14 +72,14 @@ class ICIDrivenCVDAccelerationScore:
         return df.groupby("gene")["ivw_beta"].median().to_dict()
 
     def _load_bds(self) -> dict[str, float]:
-        """加载双向性评分（BDS）。"""
+        """Load per-gene bidirectionality scores (BDS)."""
         path = PRETRAINED_DIR / "bidirectional_scores.parquet"
         if not path.exists():
             return {}
         df = pd.read_parquet(path)
         return df["BDS"].to_dict()
 
-    # ── 单患者评分 ─────────────────────────────────────────────────────────────
+    # ── Single-patient scoring ────────────────────────────────────────────────
 
     def compute(
         self,
@@ -82,20 +87,22 @@ class ICIDrivenCVDAccelerationScore:
         proposed_ici: str,
         cvd_susceptibility: float = 0.5,
     ) -> dict:
-        """计算单患者的 ICI-CVD 加速评分。
+        """Compute the ICI-CVD acceleration score for a single patient.
 
         Parameters
         ----------
         patient_expr : dict[str, float]
-            患者肿瘤中检查点基因的表达水平（z-score 或 log-TPM）。
+            Tumor checkpoint expression profile (z-score or log-TPM).
         proposed_ici : str
-            拟使用的 ICI 药物名称。
+            Name of the candidate ICI drug.
         cvd_susceptibility : float
-            患者基线 CVD 易感性（0–1，来自 CVDBaselineRiskScore）。
+            Baseline CVD susceptibility in [0, 1].
 
         Returns
         -------
-        dict  含 accel_score, components, interpretation
+        dict
+            Keys: drug, targets, accel_score, cvd_susceptibility,
+            components (per-target decomposition), interpretation.
         """
         ici_info = ICI_CVD_PRIOR.get(proposed_ici, {})
         targets = ici_info.get("targets", [])
@@ -103,20 +110,20 @@ class ICIDrivenCVDAccelerationScore:
 
         components = {}
         for target in targets:
-            # 患者表达水平（归一化到 0–1）
+            # Patient expression weight, normalized to [0, 1].
             expr = patient_expr.get(target, 0.0)
-            expr_weight = float(np.clip((expr + 3) / 6, 0, 1))  # 假设 z-score 范围 -3~3
+            expr_weight = float(np.clip((expr + 3) / 6, 0, 1))  # assumes z-score in [-3, +3]
 
-            # MR 效应（数据驱动；无数据则用先验）
+            # MR effect (data-driven; fall back to drug-level prior if missing).
             mr_beta = self._mr_effects.get(target, cvd_risk_prior * 0.5)
 
-            # 双向性调节
+            # Bidirectionality modifier.
             bds = self._bds.get(target, 0.0)
             bidirectionality_mod = 1.0 + abs(bds) * 0.3
 
             comp = expr_weight * abs(mr_beta) * bidirectionality_mod * cvd_susceptibility
             if mr_beta < 0:
-                comp = -comp  # CVD 保护性靶点
+                comp = -comp  # CVD-protective target
             components[target] = {
                 "expr_weight": expr_weight,
                 "mr_beta": mr_beta,
@@ -141,15 +148,18 @@ class ICIDrivenCVDAccelerationScore:
     @staticmethod
     def _interpret(score: float, drug: str) -> str:
         if score > 0.4:
-            return f"高风险：{drug} 可能显著加速 CVD 进展，建议选择替代方案或加强心脏保护"
+            return (f"HIGH risk: {drug} may significantly accelerate CVD progression. "
+                    f"Consider an alternative regimen or aggressive cardiac protection.")
         elif score > 0.2:
-            return f"中风险：{drug} 可能适度加速 CVD，建议密切心血管监测"
+            return (f"MODERATE risk: {drug} may moderately accelerate CVD. "
+                    f"Close cardiovascular monitoring is recommended.")
         elif score > 0:
-            return f"低风险：{drug} 对 CVD 影响较小，标准心脏监测即可"
+            return (f"LOW risk: {drug} has limited impact on CVD; standard cardiac "
+                    f"monitoring is sufficient.")
         else:
-            return f"CVD 保护：{drug} 可能对心血管具有保护作用"
+            return f"CVD-PROTECTIVE: {drug} may confer cardiovascular protection."
 
-    # ── 批量评分（多药物 × 多患者场景）────────────────────────────────────────
+    # ── Batch scoring (multi-patient x multi-drug) ────────────────────────────
 
     def batch_score(
         self,
@@ -158,20 +168,23 @@ class ICIDrivenCVDAccelerationScore:
         expr_cols: list[str] | None = None,
         cvd_col: str = "cvd_susceptibility",
     ) -> pd.DataFrame:
-        """对多患者 × 多 ICI 方案批量计算 CVD 加速评分。
+        """Score multiple patients across multiple candidate ICIs.
 
         Parameters
         ----------
         patient_profiles : pd.DataFrame
-            每行一个患者，含表达列和 cvd_susceptibility 列。
+            One row per patient. Must contain expression columns and a
+            cvd_susceptibility column.
         ici_drugs : list[str] | None
-            ICI 药物列表，None 则使用全部已知 ICI。
+            Candidate ICI list; None uses every supported drug.
         expr_cols : list[str] | None
-            表达列名（基因名），None 则自动检测。
+            Expression column names (gene symbols); None auto-detects from the
+            built-in checkpoint panel.
 
         Returns
         -------
-        pd.DataFrame  行=患者, 列=药物 accel_score
+        pd.DataFrame
+            Rows = patients, columns = '<drug>_accel'.
         """
         if ici_drugs is None:
             ici_drugs = list(ICI_CVD_PRIOR.keys())
@@ -194,10 +207,10 @@ class ICIDrivenCVDAccelerationScore:
             df.to_parquet(self.out_dir / "ici_cvd_accel_scores.parquet")
         return df
 
-    # ── 演示案例 ──────────────────────────────────────────────────────────────
+    # ── Demo cases ────────────────────────────────────────────────────────────
 
     def demo_case_studies(self) -> pd.DataFrame:
-        """生成三个典型案例演示。"""
+        """Run three illustrative cases."""
         cases = [
             {
                 "name": "Patient A (NSCLC, low CVD risk)",
@@ -238,7 +251,7 @@ class ICIDrivenCVDAccelerationScore:
 
         for _, r in df.iterrows():
             logger.info(
-                "[%s]\n  药物=%s, 加速评分=%.3f\n  解读: %s",
+                "[%s] drug=%s accel=%.3f -- %s",
                 r["case"], r["proposed_ici"], r["accel_score"], r["interpretation"],
             )
         return df

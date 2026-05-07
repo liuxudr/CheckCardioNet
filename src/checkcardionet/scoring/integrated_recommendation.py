@@ -1,11 +1,11 @@
-"""综合推荐系统：整合肿瘤获益 + CVD 风险 → 个体化 ICI 方案推荐。
+"""Integrated recommendation system: tumor benefit + CVD risk -> individualized ICI plan.
 
-决策矩阵：
-                Low CVD Accel Risk   High CVD Accel Risk
-High Onco Benefit  Standard ICI        Dual-benefit 药物优先
-                                       或 Standard ICI + 心脏保护
-Low Onco Benefit   ICI 考虑            避免 ICI
-                                       (或 dual-benefit only)
+Decision matrix:
+                       Low CVD accel risk        High CVD accel risk
+  High onco benefit    Standard ICI              Prefer dual-benefit drug
+                                                  (or Standard ICI + cardiac protection)
+  Low  onco benefit    Consider ICI              Avoid ICI
+                                                  (or dual-benefit only)
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from ..data.preprocess import PRETRAINED_DIR
 
 logger = logging.getLogger(__name__)
 
-# 肿瘤对 ICI 应答的粗略先验（来自文献 ORR）
+# Coarse per-cancer ORR priors (literature-derived).
 ONCO_PRIOR_ORR: dict[str, dict[str, float]] = {
     "pembrolizumab": {"SKCM": 0.45, "NSCLC": 0.35, "BLCA": 0.25, "default": 0.25},
     "nivolumab":     {"SKCM": 0.40, "KIRC": 0.25, "HCC": 0.20, "default": 0.22},
@@ -32,9 +32,9 @@ ONCO_PRIOR_ORR: dict[str, dict[str, float]] = {
 
 
 class IntegratedRecommendationSystem:
-    """整合三维评分生成个体化 ICI 推荐。
+    """Generate an individualized ICI recommendation by combining three signals.
 
-    用法::
+    Example::
 
         system = IntegratedRecommendationSystem()
         rec = system.generate_recommendation(
@@ -53,7 +53,7 @@ class IntegratedRecommendationSystem:
         from .cvd_acceleration_score import ICIDrivenCVDAccelerationScore
         self._accel_scorer = ICIDrivenCVDAccelerationScore(self.out_dir)
 
-    # ── 主推荐函数 ─────────────────────────────────────────────────────────────
+    # ── Main recommendation entry point ───────────────────────────────────────
 
     def generate_recommendation(
         self,
@@ -62,27 +62,29 @@ class IntegratedRecommendationSystem:
         cvd_susceptibility: float = 0.5,
         candidate_drugs: list[str] | None = None,
     ) -> dict:
-        """生成个体化 ICI 治疗推荐。
+        """Generate an individualized ICI treatment recommendation.
 
         Parameters
         ----------
         patient_expr : dict[str, float]
-            患者肿瘤检查点表达谱（z-score）。
+            Tumor checkpoint expression profile (z-score).
         cancer_type : str
-            癌种代码（如 "NSCLC", "SKCM"）。
+            Cancer code (e.g. "NSCLC", "SKCM").
         cvd_susceptibility : float
-            基线 CVD 风险（0–1）。
+            Baseline CVD risk in [0, 1].
         candidate_drugs : list[str] | None
-            候选 ICI 列表，None 则考虑所有已知 ICI。
+            Candidate ICI list; None considers every supported drug.
 
         Returns
         -------
-        dict  包含 recommendation, decision_matrix, ranked_drugs
+        dict
+            Keys: patient_cancer, cvd_susceptibility, ranked_drugs (DataFrame),
+            primary_recommendation, recommendation (text).
         """
         if candidate_drugs is None:
             candidate_drugs = list(ONCO_PRIOR_ORR.keys())
 
-        # 加载 dual-benefit atlas
+        # Load the dual-benefit atlas (drug -> tier).
         atlas = self._load_atlas()
 
         drug_scores = []
@@ -105,7 +107,7 @@ class IntegratedRecommendationSystem:
 
         df = pd.DataFrame(drug_scores).sort_values("recommendation_priority", ascending=False)
 
-        # 推荐决策
+        # Pick the primary recommendation (highest priority row).
         primary = df.iloc[0] if not df.empty else None
         rec = self._generate_text(primary, df, cancer_type, cvd_susceptibility)
 
@@ -117,7 +119,7 @@ class IntegratedRecommendationSystem:
             "recommendation": rec,
         }
 
-    # ── 内部辅助 ─────────────────────────────────────────────────────────────
+    # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _estimate_onco_benefit(self, drug: str, cancer_type: str) -> float:
         priors = ONCO_PRIOR_ORR.get(drug, {})
@@ -142,7 +144,7 @@ class IntegratedRecommendationSystem:
 
     @staticmethod
     def _priority(onco: float, accel: float) -> float:
-        """推荐优先级：高获益 + 低 CVD 加速 = 高优先级。"""
+        """Recommendation priority: high benefit + low CVD acceleration ranks first."""
         return onco - 0.5 * max(0, accel)
 
     def _load_atlas(self) -> pd.DataFrame | None:
@@ -156,37 +158,42 @@ class IntegratedRecommendationSystem:
         cancer_type: str,
         cvd_susc: float,
     ) -> str:
-        risk_level = "高" if cvd_susc > 0.6 else ("中" if cvd_susc > 0.3 else "低")
-        lines = [f"== 个体化 ICI 方案推荐 ==",
-                 f"癌种: {cancer_type} | 基线 CVD 风险: {risk_level}（{cvd_susc:.2f}）\n"]
+        risk_level = "high" if cvd_susc > 0.6 else ("moderate" if cvd_susc > 0.3 else "low")
+        lines = [
+            "== Individualized ICI Recommendation ==",
+            f"Cancer type: {cancer_type} | Baseline CVD risk: {risk_level} ({cvd_susc:.2f})\n",
+        ]
 
         if primary is None:
-            lines.append("无可用 ICI 候选。")
+            lines.append("No eligible ICI candidate.")
             return "\n".join(lines)
 
-        lines.append(f"首选方案: {primary['drug']}")
-        lines.append(f"  肿瘤获益估计: {primary['onco_benefit']:.0%}")
-        lines.append(f"  CVD 加速评分: {primary['cvd_accel_score']:.3f}")
-        lines.append(f"  综合净获益: {primary['net_benefit']:.3f}")
-        lines.append(f"  分类: {primary['category']}")
+        lines.append(f"Primary recommendation: {primary['drug']}")
+        lines.append(f"  Tumor benefit (est.):   {primary['onco_benefit']:.0%}")
+        lines.append(f"  CVD acceleration score: {primary['cvd_accel_score']:+.3f}")
+        lines.append(f"  Net benefit:            {primary['net_benefit']:+.3f}")
+        lines.append(f"  Category:               {primary['category']}")
 
         if cvd_susc > 0.6 and primary["cvd_accel_score"] > 0.3:
-            lines.append("\n⚠ 心脏保护建议：")
-            lines.append("  • 联合他汀 ± 阿司匹林（斑块稳定）")
-            lines.append("  • 基线及每3个月超声心动图")
-            lines.append("  • 如 CVD 事件高风险，考虑换用 magrolimab（dual-benefit）")
+            lines.append("\n[!] Cardiac-protection suggestions:")
+            lines.append("  - Co-administer statin +/- aspirin (plaque stabilization)")
+            lines.append("  - Baseline echocardiogram, repeat every 3 months")
+            lines.append("  - If CVD event risk is very high, consider switching to "
+                         "magrolimab (dual-benefit)")
 
         dual_benefit = df[df["category"].str.contains("CVD-protective|dual-benefit",
                                                         case=False, na=False)]
         if not dual_benefit.empty:
-            lines.append(f"\n双效替代方案: {', '.join(dual_benefit['drug'].tolist())}")
+            lines.append(
+                f"\nDual-benefit alternatives: {', '.join(dual_benefit['drug'].tolist())}"
+            )
 
         return "\n".join(lines)
 
-    # ── 批量案例演示 ──────────────────────────────────────────────────────────
+    # ── Batch demo scenarios ──────────────────────────────────────────────────
 
     def demo_scenarios(self) -> pd.DataFrame:
-        """演示三个典型临床场景。"""
+        """Run three illustrative clinical scenarios."""
         scenarios = [
             dict(name="NSCLC_low_CVD", patient_expr={"PDCD1": 2.0, "CD47": 0.5},
                  cancer_type="NSCLC", cvd_susceptibility=0.2),
@@ -206,7 +213,7 @@ class IntegratedRecommendationSystem:
                 "top3_drugs": ", ".join(rec["ranked_drugs"]["drug"].head(3).tolist()),
                 "recommendation_summary": rec["recommendation"],
             })
-            logger.info("场景 [%s]:\n%s", s["name"], rec["recommendation"])
+            logger.info("Scenario [%s]:\n%s", s["name"], rec["recommendation"])
 
         df = pd.DataFrame(rows)
         if self.out_dir is not None:
